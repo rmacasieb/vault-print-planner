@@ -2053,7 +2053,7 @@ details.termfold[open] > summary { color: var(--ink); }
           <label class="switch" for="mixSupports"><input type="checkbox" id="mixSupports" ${mixSupports ? 'checked' : ''}><span class="track"></span><span>Fewer plates<small>Support parts share plates; supports stay on just for them</small></span></label>
           ${b.lines.some(isLabel) ? `<label class="switch" for="labelsApart"><input type="checkbox" id="labelsApart" ${labelsApart ? 'checked' : ''}><span class="track"></span><span>Labels on their own plate<small>${labelsApart ? 'Add text and colors in the slicer without touching other plates' : 'Off: labels print with the rest, in their color'}</small></span></label>` : ''}
         </div>
-        <details class="info" data-k="plates" ${openInfo.has('plates') ? 'open' : ''}><summary>How plates are laid out</summary><p>Press <b>Printed</b> when a plate comes off. Plate numbers stay the same, so they keep matching your Bambu Studio project. Small parts that are easy to lose come with 10% spares. ${labelsApart ? 'Labels get a plate of their own, so you can add your text and colors in the slicer without touching the other plates. Turn that off to print them with the rest.' : 'Labels print with the rest, in their usual color.'} Plates are packed for a ${printer.v[0]} \u00d7 ${printer.v[1]} mm bed with 5 mm edges, and kept under one 1 kg spool each. ${mixSupports ? 'TPU parts get their own plates. Parts that need supports share plates with the rest: the Bambu Studio project turns supports on for just those parts. If you drag STLs in by hand, turn supports on for those parts yourself.' : 'Parts that need supports or TPU get their own plates, so you never change slicer settings in the middle of a plate.'} Parts with supports keep as much room from their neighbours as Bambu’s supports for them spread (measured by slicing each part alone). Tall parts printed on an edge get straight supports instead of tree supports, which would fan out about 40 mm into the part next door. Wall counts are set per part, so they can share a plate. Plates are drawn like Bambu Studio\u2019s top view: front at the bottom, with the printer\u2019s no-print corner hatched in red.</p></details>
+        <details class="info" data-k="plates" ${openInfo.has('plates') ? 'open' : ''}><summary>How plates are laid out</summary><p>Press <b>Printed</b> when a plate comes off. Plate numbers stay the same, so they keep matching your Bambu Studio project. The Bambu Studio project gives each color its own filament, already in that color with TPU last, so each plate prints from the right AMS slot; with one spool, load that plate\u2019s color. Small parts that are easy to lose come with 10% spares. ${labelsApart ? 'Labels get a plate of their own, so you can add your text and colors in the slicer without touching the other plates. Turn that off to print them with the rest.' : 'Labels print with the rest, in their usual color.'} Plates are packed for a ${printer.v[0]} \u00d7 ${printer.v[1]} mm bed with 5 mm edges, and kept under one 1 kg spool each. ${mixSupports ? 'TPU parts get their own plates. Parts that need supports share plates with the rest: the Bambu Studio project turns supports on for just those parts. If you drag STLs in by hand, turn supports on for those parts yourself.' : 'Parts that need supports or TPU get their own plates, so you never change slicer settings in the middle of a plate.'} Parts with supports keep as much room from their neighbours as Bambu’s supports for them spread (measured by slicing each part alone). Tall parts printed on an edge get straight supports instead of tree supports, which would fan out about 40 mm into the part next door. Wall counts are set per part, so they can share a plate. Plates are drawn like Bambu Studio\u2019s top view: front at the bottom, with the printer\u2019s no-print corner hatched in red.</p></details>
       </div>
       ${plates.length ? gatherPanel(plates) : ''}
       ${plates.length ? `<div class="plates">${allPlates.map(pl => pl.done ? `<div class="panel plate done"><div class="plate-head"><b>Plate ${pl.n}</b><span><span class="swatch sw-${pl.color}"></span>${COLOR_NAME[pl.color]} \u00b7 ${plural(pl.items.length, 'part')}</span></div><div class="donerow"><span class="ok">${ICON_OK}Printed</span><button class="btn" data-undoplate="${pl.n}">Undo</button></div></div>` : `<div class="panel plate">
@@ -2110,8 +2110,12 @@ details.termfold[open] > summary { color: var(--ink); }
   // ---------- gather script: one folder per plate, optional .3mf per plate ----------
   function plateFolder(pl) { return `Plate ${String(pl.n).padStart(2, '0')} - ${COLOR_NAME[pl.color]}${pl.supports ? ' - supports' : ''}`; }
   // The plate plan the project builder reads: each part's file, position on its plate, and per-part print settings
+  // One filament per plate colour, in the step 3 order with TPU last: e.g. grey 1, charcoal 2, orange 3, TPU 4
   function planFor(plates) {
-    return { bed: [printer.v[0], printer.v[1]], ...(preset().plate ? { plate: preset().plate } : {}), bambu: preset().bambu || null, plates: plates.map(pl => ({ name: plateFolder(pl),
+    const keys = COLOR_ORDER.filter(k => plates.some(pl => pl.color === k));
+    return { bed: [printer.v[0], printer.v[1]], ...(preset().plate ? { plate: preset().plate } : {}), bambu: preset().bambu || null,
+      filaments: keys.map(k => ({ name: COLOR_NAME[k], colour: COLOR_FILL[k].toUpperCase(), ...(k === 'tpu' ? { tpu: true } : {}) })),
+      plates: plates.map(pl => ({ name: plateFolder(pl), filament: keys.indexOf(pl.color) + 1,
       pieces: pl.items.map(it => ({ path: it.p.l.file.path, name: it.p.l.label, spin: it.asis ? 0 : +(it.p.l.file.angle || 0).toFixed(2), x: +(it.x + (it.p.pad || 0)).toFixed(2), y: +(it.y + (it.p.pad || 0)).toFixed(2), w: +(it.w - 2 * (it.p.pad || 0)).toFixed(2), h: +(it.h - 2 * (it.p.pad || 0)).toFixed(2), ...(it.p.pad ? { brim: it.p.pad } : {}), ...(it.diag ? { diag: it.diag === 45 ? true : it.diag } : {}), ...(it.corner ? { corner: it.corner } : {}), ...(it.p.l.tpu || it.p.l.color === 'tpu' ? { tpu: true } : {}), ...(it.p.l.supports ? { supports: true, ...(needsBrim(it.p.l.file) ? { standing: true } : {}) } : {}), ...(it.p.l.walls ? { walls: it.p.l.walls } : {}), ...(it.p.l.infill ? { infill: it.p.l.infill } : {}) })) })) };
   }
   // ---------- Bambu Studio project, built right here in the browser ----------
@@ -2279,10 +2283,37 @@ details.termfold[open] > summary { color: var(--ink); }
   }
   const fileBytes = async f => (f.getFile ? await f.getFile() : f).arrayBuffer();
   const xmlEsc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // The captured settings hold two filaments, PLA then TPU. Give the project one filament per plate colour instead,
+  // each a copy of the PLA or TPU one with that colour, laid out the way Bambu Studio saves extra filaments: one entry per
+  // filament in BAMBU.perFilament (found by comparing Bambu Studio's own 2- and 4-filament saves), and on dual-nozzle
+  // printers one row per filament and nozzle type, tagged by filament_self_index. Bambu's command-line save keeps only
+  // one filament_colour, which is why every filament used to open in the same colour.
+  function withFilaments(ps, slots) {
+    const n = ps.filament_settings_id.length, idx = ps.filament_self_index || [], rows = idx.length > n, m = slots.length, out = { ...ps };
+    const src = s => (s.tpu && n > 1 ? 1 : 0); // the captured filament to copy: 0 = PLA, 1 = TPU
+    for (const k of BAMBU.perFilament || []) {
+      const v = ps[k];
+      if (!Array.isArray(v)) continue;
+      out[k] = rows && v.length === idx.length ? slots.flatMap(s => v.filter((_, i) => +idx[i] === src(s) + 1))
+        : slots.map(s => v[Math.min(src(s), v.length - 1)]);
+    }
+    out.filament_self_index = rows ? slots.flatMap((s, j) => idx.filter(x => +x === src(s) + 1).map(() => String(j + 1))) : slots.map((_, j) => String(j + 1));
+    for (const k of ['different_settings_to_system', 'inherits_group']) // one per filament plus two, all empty in the captures
+      if (Array.isArray(ps[k]) && ps[k].length === n + 2) out[k] = Array(m + 2).fill('');
+    out.filament_colour = slots.map(s => s.colour);
+    out.filament_map = slots.map(() => '1'); // everything on the first (left) nozzle
+    // Bambu's slicer refuses a flush table that isn't filaments x filaments (per nozzle), and crashes when a part uses
+    // a filament with no colour: both checked with its command line on 2026-11-14
+    const nozzles = (ps.nozzle_diameter || [0]).length;
+    out.flush_volumes_matrix = Array.from({ length: nozzles * m * m }, (_, i) => (i % (m * m)) % (m + 1) ? '280' : '0');
+    if ((ps.flush_volumes_vector || []).length < 2 * m) out.flush_volumes_vector = Array(2 * m).fill('140');
+    return out;
+  }
   async function buildProject(plan, folder, progress) {
     const missing = [...new Set(plan.plates.flatMap(p => p.pieces.map(x => x.path)))].filter(p => !findFile(folder.files, p));
     if (missing.length) throw new Error(`${plural(missing.length, 'part')} not found in \u201c${folder.name}\u201d: ${missingList(missing)}. Pick the Vault download folder (${SRC_DEFAULT.split('/').pop()}).`);
-    const ps = plan.printer && BAMBU.per[plan.printer] ? { ...BAMBU.base, ...BAMBU.per[plan.printer] } : null;
+    let ps = plan.printer && BAMBU.per[plan.printer] ? { ...BAMBU.base, ...BAMBU.per[plan.printer] } : null;
+    if (ps && plan.filaments && plan.filaments.length) ps = withFilaments(ps, plan.filaments);
     const ver = (ps && ps.version) || '02.09.01.70';
     // Bambu Studio spaces plates by the whole bed, wider than one nozzle's reach on dual-nozzle printers
     const [BED_W, BED_D] = plan.plate || plan.bed, count = plan.plates.length;
@@ -2328,7 +2359,7 @@ details.termfold[open] > summary { color: var(--ink); }
         if (p.walls) extra += `    <metadata key="wall_loops" value="${p.walls}"/>\n`;
         if (p.infill) extra += `    <metadata key="sparse_infill_density" value="${p.infill}%"/>\n`;
         if (p.brim) extra += `    <metadata key="brim_type" value="outer_only"/>\n    <metadata key="brim_width" value="${p.brim === true ? 5 : p.brim}"/>\n`;
-        settings.push(`  <object id="${objId}">\n    <metadata key="name" value="${xmlEsc(p.name)}"/>\n    <metadata key="extruder" value="${p.tpu && ps && ps.filament_settings_id.length > 1 ? 2 : 1}"/>\n${extra}    <part id="${meshId}" subtype="normal_part">\n      <metadata key="name" value="${xmlEsc(p.name)}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n    </part>\n  </object>\n`);
+        settings.push(`  <object id="${objId}">\n    <metadata key="name" value="${xmlEsc(p.name)}"/>\n    <metadata key="extruder" value="${!ps ? 1 : plan.filaments && plate.filament ? plate.filament : p.tpu && ps.filament_settings_id.length > 1 ? 2 : 1}"/>\n${extra}    <part id="${meshId}" subtype="normal_part">\n      <metadata key="name" value="${xmlEsc(p.name)}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n    </part>\n  </object>\n`);
         inst.push(`    <model_instance>\n      <metadata key="object_id" value="${objId}"/>\n      <metadata key="instance_id" value="0"/>\n      <metadata key="identify_id" value="${objId}"/>\n    </model_instance>\n`);
         cut.push(` <object id="${cut.length + 1}">\n  <cut_id id="0" check_sum="1" connectors_cnt="0"/>\n </object>\n`);
         done++;

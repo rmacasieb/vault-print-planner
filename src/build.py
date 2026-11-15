@@ -58,6 +58,9 @@ catalog = "window.VAULT_FILES=" + json.dumps(rows, ensure_ascii=False, separator
 sets = {f.stem: json.loads(f.read_text()) for f in sorted((here / "bambu-settings").glob("*.json"))}
 base = {k: v for k, v in next(iter(sets.values()), {}).items() if all(k in d and d[k] == v for d in sets.values())}
 bambu = {"base": base, "per": {i: {k: v for k, v in d.items() if k not in base} for i, d in sets.items()}}
+# Settings with one entry per filament (src/bambu-filament-keys.json, from src/bambu-filament-keys.py), so the page can
+# give each plate colour its own filament
+bambu["perFilament"] = json.loads((here / "bambu-filament-keys.json").read_text())
 catalog += "window.BAMBU_SETTINGS=" + json.dumps(bambu, ensure_ascii=False, separators=(",", ":")) + ";"
 # Bed sizes for the "My printer isn't listed" lookup (src/printer-beds.tsv, from OrcaSlicer's profiles by src/orca-beds.py)
 beds = [l.split("\t") for l in (here / "printer-beds.tsv").read_text().splitlines() if l and not l.startswith("#")]
