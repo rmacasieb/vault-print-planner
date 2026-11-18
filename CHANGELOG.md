@@ -2,6 +2,10 @@
 
 Changes to the Vault Print Planner at [vault.romy.io](https://vault.romy.io), newest first.
 
+## 2026-11-17
+
+- **Take your build to another computer:** "Use on another computer" at the top gives you a link holding your towers, settings and printed plates. Open it on another computer to pick up where you left off. There's still no account, and nothing is stored online.
+
 ## 2026-11-14
 
 - **Each color is its own filament in the Bambu Studio project:** light grey, charcoal, orange, labels and TPU now come in as separate filaments already set to those colors, with every part on its plate's filament. Before, everything opened as one green filament and you had to reassign parts by hand.

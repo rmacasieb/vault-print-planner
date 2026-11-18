@@ -67,12 +67,17 @@ header.top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-it
 .byline a:hover { color: var(--ink); }
 .newsbtn { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .newsbtn:hover { color: var(--ink); }
-dialog#news { border: 1px solid var(--line); border-radius: 14px; background: var(--sheet); color: var(--ink); padding: 20px 22px; width: min(620px, calc(100vw - 32px)); max-height: min(80vh, 720px); overflow-y: auto; overscroll-behavior: contain; position: fixed; }
-dialog#news::backdrop { background: rgba(10, 12, 12, .45); }
-dialog#news h2 { margin: 0 32px 4px 0; font-family: var(--f-display); font-stretch: 112%; font-size: 20px; }
-#news .changes h3 { margin: 16px 0 6px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
+dialog#news, dialog#carry { border: 1px solid var(--line); border-radius: 14px; background: var(--sheet); color: var(--ink); padding: 20px 22px; width: min(620px, calc(100vw - 32px)); max-height: min(80vh, 720px); overflow-y: auto; overscroll-behavior: contain; position: fixed; }
+dialog#news::backdrop, dialog#carry::backdrop { background: rgba(10, 12, 12, .45); }
+dialog#news h2, dialog#carry h2 { margin: 0 32px 4px 0; font-family: var(--f-display); font-stretch: 112%; font-size: 20px; }
+#news .changes h3, #carry h3 { margin: 16px 0 6px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
 #news .changes ul { margin: 0; padding-left: 18px; }
 #news .changes li { margin: 5px 0; font-size: 14px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+#carry .cnote { margin: 6px 0; font-size: 14px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+#carry .cnote.small { font-size: 13px; }
+#carry .crow { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+#carry .crow input { flex: 1 1 200px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--paper, var(--sheet)); color: var(--ink); font: inherit; font-size: 13px; }
+#carry .cmsg { margin: 10px 0 0; font-size: 14px; font-weight: 600; color: var(--ink); min-height: 1.5em; }
 #news .changes b { color: var(--ink); font-weight: 600; }
 .hbtns { display: flex; gap: 8px; }
 .hbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 14px 0 11px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; white-space: nowrap; }
@@ -497,7 +502,7 @@ details.termfold[open] > summary { color: var(--ink); }
     </div>
     <div class="hside">
       <p class="byline">An unofficial companion tool by Romy ❤️</p>
-      <p class="pitch">Free with no ads and your files stay local · <button type="button" class="newsbtn" id="newsBtn" aria-haspopup="dialog">What’s new</button></p>
+      <p class="pitch">Free with no ads and your files stay local · <button type="button" class="newsbtn" id="newsBtn" aria-haspopup="dialog">What’s new</button> · <button type="button" class="newsbtn" id="carryBtn" aria-haspopup="dialog">Use on another computer</button></p>
       <div class="hbtns">
         <a class="hbtn kofi" href="https://ko-fi.com/E8R32A64D1" target="_blank" rel="noopener"><img src="https://storage.ko-fi.com/cdn/cup-border.png" alt=""><span>Support<span class="lg"> me</span> on Ko-fi</span></a>
       </div>
@@ -580,6 +585,12 @@ details.termfold[open] > summary { color: var(--ink); }
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <dialog id="news" aria-labelledby="newsTitle"><button type="button" class="vclose" id="newsClose" aria-label="Close">&times;</button><h2 id="newsTitle">What’s new</h2><div class="changes"><!--CHANGELOG--></div></dialog>
+<dialog id="carry" aria-labelledby="carryTitle"><button type="button" class="vclose" id="carryClose" aria-label="Close">&times;</button><h2 id="carryTitle">Use this build on another computer</h2>
+<p class="cnote">There are no accounts, and nothing is stored online. Your towers, settings and printed plates are saved in this browser only. To pick up where you left off somewhere else, take this link with you.</p>
+<p class="cnote">Email it to yourself, text it, or bookmark it. Opening it loads this build.</p>
+<div class="crow"><input type="text" id="carryLink" readonly aria-label="Link to this build"><button type="button" class="btn primary" id="carryCopy">Copy link</button></div>
+<p class="cnote small">The link is a snapshot. After you mark more plates printed, copy a new one.</p>
+<p class="cmsg" id="carryMsg" role="status" aria-live="polite"></p></dialog>
 <dialog id="viewer" aria-label="Part preview"><button type="button" class="vclose" id="viewerClose" aria-label="Close preview">&times;</button><div id="viewerBody" class="vbody"></div></dialog>
 
 
@@ -1017,6 +1028,79 @@ details.termfold[open] > summary { color: var(--ink); }
   // What's new: header button opens the changelog; close with ×, Esc or a click outside
   $('newsBtn').onclick = () => $('news').showModal();
   $('newsClose').onclick = () => $('news').close();
+  // ---------- take the build to another computer (no accounts: a link holds a copy) ----------
+  // Everything the page saves, except this computer's own folders (src, dest). The link keeps it after the #, which
+  // browsers never send to the server.
+  const CARRY_KEYS = ['config', 'printer', 'onlyFits', 'plateColors', 'byColor', 'labelsApart', 'mixSupports', 'gatherMode',
+    'printed', 'plateState', 'steps', 'lastTower', 'view', 'towers', 'seq', 'build', 'extras', 'printScope'];
+  const CARRY_TYPES = { towers: 'array', extras: 'array', build: 'array', printed: 'object', plateState: 'object', steps: 'object', printer: 'object', config: 'object' };
+  const say = m => { if ($('carry').open) $('carryMsg').textContent = m; else toast(m); };
+  function carrySnapshot() {
+    const s = {};
+    CARRY_KEYS.forEach(k => { const v = store.get(k, undefined); if (v !== undefined) s[k] = v; });
+    return { vault: 1, at: new Date().toISOString(), s };
+  }
+  const b64u = bytes => { let bin = ''; bytes.forEach(b => { bin += String.fromCharCode(b); }); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  async function squeeze(text, how) {
+    const cs = how === 'in' ? new DecompressionStream('deflate-raw') : new CompressionStream('deflate-raw');
+    const w = cs.writable.getWriter(); w.write(typeof text === 'string' ? new TextEncoder().encode(text) : text).catch(() => {}); w.close().catch(() => {});
+    return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  }
+  async function carryLink() {
+    const z = await squeeze(JSON.stringify(carrySnapshot()));
+    return location.origin + location.pathname + '#build=' + b64u(z);
+  }
+  // A copy is checked before it replaces anything: only the keys above, each of the type the page expects
+  function carryCheck(d) {
+    if (!d || d.vault !== 1 || !d.s || typeof d.s !== 'object') return null;
+    for (const [k, v] of Object.entries(d.s)) {
+      if (!CARRY_KEYS.includes(k)) return null;
+      const want = CARRY_TYPES[k];
+      if (want === 'array' && !Array.isArray(v)) return null;
+      if (want === 'object' && (!v || typeof v !== 'object' || Array.isArray(v))) return null;
+    }
+    return d;
+  }
+  const hasBuild = () => (store.get('towers', []) || []).some(t => (t.levels || []).some(l => l.length)) || (store.get('extras', []) || []).length > 0;
+  const dayOf = iso => { const d = new Date(iso); return isNaN(d) ? 'earlier' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }); };
+  function carryApply(d) {
+    d = carryCheck(d);
+    if (!d) { say('That build link is damaged or incomplete.'); return false; }
+    const same = CARRY_KEYS.every(k => JSON.stringify(store.get(k, undefined)) === JSON.stringify(d.s[k]));
+    if (!same && hasBuild() && !confirm(`Replace the build on this computer with the one saved ${dayOf(d.at)}?`)) return false;
+    try {
+      CARRY_KEYS.forEach(k => localStorage.removeItem('vpp.' + k));
+      Object.entries(d.s).forEach(([k, v]) => store.set(k, v));
+      sessionStorage.setItem('vpp.opened', d.at || '');
+    } catch (e) { say('This browser won’t let the page save anything (a private window?).'); return false; }
+    history.replaceState(null, '', location.pathname + location.search);
+    location.reload();
+    return true;
+  }
+  $('carryBtn').onclick = async () => {
+    $('carryMsg').textContent = ''; $('carry').showModal(); $('carryLink').value = 'Making the link…';
+    try { $('carryLink').value = await carryLink(); } catch (e) { $('carryLink').value = 'This browser can’t make build links. Try a current Chrome, Safari, Edge or Firefox.'; }
+  };
+  $('carryClose').onclick = () => $('carry').close();
+  $('carry').addEventListener('click', e => { const r = $('carry').getBoundingClientRect(); if (e.target === $('carry') && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $('carry').close(); });
+  $('carryCopy').onclick = async () => {
+    const v = $('carryLink').value; if (!v.startsWith('http')) return;
+    try { await navigator.clipboard.writeText(v); say('Link copied. Send it to yourself, or bookmark it.'); }
+    catch (e) { $('carryLink').select(); say('Press ⌘C or Ctrl+C to copy the link.'); }
+  };
+  // Opening a build link: load it, then reload so the page starts from it
+  async function carryFromHash() {
+    const m = location.hash.match(/^#build=([A-Za-z0-9_-]+)$/); if (!m) return;
+    let d = null;
+    try {
+      const bin = atob(m[1].replace(/-/g, '+').replace(/_/g, '/'));
+      d = JSON.parse(new TextDecoder().decode(await squeeze(Uint8Array.from(bin, ch => ch.charCodeAt(0)), 'in')));
+    } catch (e) {}
+    if (!carryApply(d)) history.replaceState(null, '', location.pathname + location.search);
+  }
+  carryFromHash();
+  window.addEventListener('hashchange', carryFromHash);
+  try { const o = sessionStorage.getItem('vpp.opened'); if (o != null) { sessionStorage.removeItem('vpp.opened'); setTimeout(() => toast(`Opened your build saved ${dayOf(o)}.`), 300); } } catch (e) {}
   $('news').addEventListener('click', e => { const r = $('news').getBoundingClientRect(); if (e.target === $('news') && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $('news').close(); });
 
   function tagsFor(l) {
