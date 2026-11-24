@@ -99,6 +99,10 @@ dialog#news h2, dialog#carry h2 { margin: 0 32px 4px 0; font-family: var(--f-dis
 .printer > label:not(.switch) { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .printer select { background: transparent; border: 0; font-weight: 600; padding: 2px 0; }
 .printer .vol { color: var(--muted); }
+.printer .relbox { display: inline-flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
+.printer .relbox label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.printer .relhelp { font-size: 13px; color: var(--muted); }
+.printer .relhow { flex-basis: 100%; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .printer input[type=number] { width: 7ch; min-width: 0; background: var(--sheet-2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-variant-numeric: tabular-nums; text-align: right; -moz-appearance: textfield; appearance: textfield; }
 .printer input[type=number]::-webkit-inner-spin-button, .printer input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #customVol { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -176,7 +180,10 @@ details.more > div { display: grid; gap: 14px; margin-top: 14px; }
 .group h3 { margin: 0; padding: 12px 18px 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
 .parts { overflow-x: auto; }
 .row { display: grid; grid-template-columns: 22px 64px 40px minmax(0, 1fr) auto 38px; gap: 12px; align-items: center; padding: 8px 18px; border-top: 1px solid var(--line); }
-.thumb { display: block; border: 0; padding: 0; border-radius: 8px; background-color: var(--sheet-2); background-repeat: no-repeat; cursor: zoom-in; }
+.thumb { display: block; position: relative; border: 0; padding: 0; border-radius: 8px; background-color: var(--sheet-2); cursor: zoom-in; }
+/* The picture sits on its own layer over the grey tile and fades in once its sheet has loaded (see ensureSheet) */
+.thumb::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--pic) no-repeat; background-size: var(--ps); background-position: var(--pp); opacity: 0; transition: opacity .25s ease; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .thumb::after { transition: none; } }
 .thumb.sm { width: 64px; height: 64px; }
 .thumb.md { width: 100%; aspect-ratio: 1; max-width: 100%; }
 .thumb.lg { width: min(300px, 100%); aspect-ratio: 1; max-width: 100%; cursor: default; }
@@ -465,7 +472,7 @@ html.nopics .xitem { grid-template-columns: 0 minmax(0, 1fr) auto; }
 .gstep.done .gnum { background: var(--ok); color: var(--sheet); }
 .gtext { display: grid; gap: 3px; min-width: 0; }
 .gtext small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
-.gtext code { font-size: 11.5px; background: var(--sheet-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.gtext code { font-size: 11.5px; background: var(--sheet-2); padding: 1px 5px; border-radius: 4px; white-space: nowrap; } /* folder names stay on one line */
 .gstep .btn { white-space: nowrap; }
 .gstep .btn:disabled { opacity: .4; cursor: not-allowed; }
 .fstat { display: flex; gap: 6px; align-items: flex-start; margin: 3px 0 0; font-size: 12.5px; }
@@ -528,6 +535,8 @@ details.termfold[open] > summary { color: var(--ink); }
         <input type="number" id="pvz" min="100" max="1000" aria-label="Height Z (mm)"> mm</span>
       </span>
       <span class="pfrom" id="pfrom" hidden></span>
+      <span class="relbox"><label for="release">USSA files</label><select id="release" aria-describedby="releaseHow"></select><button type="button" class="newsbtn relhelp" id="releaseHelp" aria-expanded="false" aria-controls="releaseHow">Which one?</button></span>
+      <span class="relhow" id="releaseHow" hidden></span>
       <label class="switch" for="onlyFits"><input type="checkbox" id="onlyFits"><span class="track"></span><span>Only show what fits</span></label>
     </div>
   </nav>
@@ -604,9 +613,40 @@ details.termfold[open] > summary { color: var(--ink); }
 (function () {
   const R = window.VaultRules;
   // Row: path, true footprint a, b (smallest rectangle around the part seen from above), height z, volume mm³, export angle, sprite sheet, cell, Bambu says it needs supports
-  const FILES = window.VAULT_FILES.map(r => ({ path: r[0], dims: [r[1], r[2], r[3]], vol: r[4], angle: r[5], sheet: r[6], cell: r[7], needsSupport: !!r[8], supReach: r[9] == null || r[9] < 0 ? null : r[9], ex: r[10] ? [r[10], r[11]] : null }));
-  const resolve = R.makeResolver(FILES);
+  const fileOf = r => ({ path: r[0], dims: [r[1], r[2], r[3]], vol: r[4], angle: r[5], sheet: r[6], cell: r[7], needsSupport: !!r[8], supReach: r[9] == null || r[9] < 0 ? null : r[9], ex: r[10] ? [r[10], r[11]] : null, size: r[12] });
+  // USSA has shipped the download twice. The Nov 2026 one renamed, moved and re-exported some files (several at a new
+  // angle), so sizes, angles and names come from the release the user has. Newest first.
+  const RELEASES = [
+    // Named by the folder that holds the parts. The Nov download is a zip holding this one as a second zip; naming only the
+    // inner folder means it has been unzipped (a parent folder still works, but an un-unzipped one has no parts).
+    { id: '2611', name: 'Nov 2026 (latest)', short: 'Nov 2026', folder: 'Vault Archive_18.11.2026',
+      how: 'the \u201cVault Archive_18.11.2026\u201d folder, with one Instructions Manual' },
+    { id: '2610', name: 'Oct 2026 (first release)', short: 'Oct 2026', folder: '261021_VAULT_USSA_S',
+      how: 'the \u201c261021_VAULT_USSA_S\u201d folder, with four PDF manuals' },
+  ];
+  const releaseOf = id => RELEASES.find(r => r.id === id) || RELEASES[0];
+  const FILES_2610 = window.VAULT_FILES.map(fileOf);
+  function filesOf(id) {
+    if (id !== '2611') return FILES_2610;
+    const n = window.VAULT_2611, drop = new Set(n.drop), mine = new Map(n.rows.map(r => [r[0], fileOf(r)]));
+    const out = FILES_2610.filter(f => !drop.has(f.path) && !mine.has(f.path)).map(f => n.size[f.path] ? { ...f, size: n.size[f.path] } : f);
+    return out.concat([...mine.values()]).sort((a, b) => a.path < b.path ? -1 : 1);
+  }
+  // New visitors get the latest; anyone with a build saved before releases were tracked has the Oct 2026 files
+  let release = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem('vpp.release'));
+      if (RELEASES.some(r => r.id === v)) return v;
+      const had = ['towers', 'extras', 'build'].some(k => { const x = JSON.parse(localStorage.getItem('vpp.' + k) || 'null'); return Array.isArray(x) && x.length; });
+      const id = had ? '2610' : RELEASES[0].id;
+      localStorage.setItem('vpp.release', JSON.stringify(id));
+      return id;
+    } catch (e) { return RELEASES[0].id; }
+  })();
+  let FILES = filesOf(release);
+  let resolve = R.makeResolver(FILES);
   const SRC_DEFAULT = '261021_VAULT_USSA_S';
+  const folderHint = () => releaseOf(release).folder;
   // Filament estimate. Thin-walled parts print close to solid (0.78 g/cm³ of part volume, the median of USSA's published
   // weights across 99 parts). Chunky parts (base, feet, roofs) are mostly infill, so scale down by how solid the part is.
   // Rough grams of PLA. The last factor (0.85) brings drawer totals in line with the weights USSA publishes per module
@@ -901,7 +941,18 @@ details.termfold[open] > summary { color: var(--ink); }
   }
 
   // ---------- extra parts: any single STL, printed on its own ----------
-  const FILE_BY_PATH = new Map(FILES.map(f => [f.path, f]));
+  let FILE_BY_PATH = new Map(FILES.map(f => [f.path, f]));
+  document.addEventListener('click', e => { const b = e.target.closest('[data-userel]'); if (b) useRelease(b.dataset.userel, `Using the ${releaseOf(b.dataset.userel).short} USSA files`); });
+  // Switch to another USSA release: new file table, and the caches built from it start over
+  function useRelease(id, why) {
+    if (id === release || !RELEASES.some(r => r.id === id)) return false;
+    release = id; store.set('release', id);
+    FILES = filesOf(id); resolve = R.makeResolver(FILES); FILE_BY_PATH = new Map(FILES.map(f => [f.path, f]));
+    META = null; NAMES = null;
+    renderAll();
+    if (why) toast(why);
+    return true;
+  }
   // What each file is, taken from the rules (label, colour, walls, supports). Built once, on first use.
   let META = null;
   function partMeta(path) {
@@ -988,12 +1039,29 @@ details.termfold[open] > summary { color: var(--ink); }
   // ---------- part previews ----------
   const SHEET_COLS = 8, SHEET_ROWS = {}, HAS_PREVIEWS = FILES.some(f => f.sheet);
   if (!HAS_PREVIEWS) document.documentElement.classList.add('nopics');
-  FILES.forEach(f => { if (f.sheet) SHEET_ROWS[f.sheet] = Math.max(SHEET_ROWS[f.sheet] || 1, Math.floor(f.cell / SHEET_COLS) + 1); });
+  // Sheet sizes from both releases' files, so pictures keep working after switching
+  FILES_2610.concat(filesOf('2611')).forEach(f => { if (f.sheet) SHEET_ROWS[f.sheet] = Math.max(SHEET_ROWS[f.sheet] || 1, Math.floor(f.cell / SHEET_COLS) + 1); });
   const viewMap = new Map();
+  // Part pictures come in sheets (previews/parts-NN.webp, lossless). A sheet is fetched once; until it has arrived its
+  // pictures stay hidden over the grey tile, then fade in together, so nothing pops in half drawn.
+  const sheetUrl = n => `previews/parts-${String(n).padStart(2, '0')}.webp`;
+  const sheetsAsked = new Set();
+  function ensureSheet(n) {
+    if (!n || sheetsAsked.has(n)) return;
+    sheetsAsked.add(n);
+    const show = () => { let s = $('sheetsReady'); if (!s) { s = document.createElement('style'); s.id = 'sheetsReady'; document.head.append(s); }
+      s.textContent += `.thumb[style*="parts-${String(n).padStart(2, '0')}."]::after{opacity:1}`; };
+    const img = new Image(); img.onload = img.onerror = show; img.src = sheetUrl(n); // on error too, so a tile is never stuck hidden
+  }
   function spriteStyle(f) {
+    ensureSheet(f.sheet);
     const rows = SHEET_ROWS[f.sheet], col = f.cell % SHEET_COLS, row = Math.floor(f.cell / SHEET_COLS);
-    return `background-image:url(previews/parts-${String(f.sheet).padStart(2, '0')}.png);background-size:${SHEET_COLS * 100}% ${rows * 100}%;` +
-      `background-position:${col / (SHEET_COLS - 1) * 100}% ${rows > 1 ? row / (rows - 1) * 100 : 0}%`;
+    return `--pic:url(${sheetUrl(f.sheet)});--ps:${SHEET_COLS * 100}% ${rows * 100}%;` +
+      `--pp:${col / (SHEET_COLS - 1) * 100}% ${rows > 1 ? row / (rows - 1) * 100 : 0}%`;
+  }
+  // When the browser is idle, fetch the sheets the saved build uses, so later steps show their pictures straight away
+  function preloadBuildSheets() {
+    try { computeBuild().lines.forEach(l => ensureSheet(l.file.sheet)); } catch (e) { /* only a head start */ }
   }
   function thumb(l, size) {
     viewMap.set(l.file.path, l);
@@ -1032,7 +1100,7 @@ details.termfold[open] > summary { color: var(--ink); }
   // Everything the page saves, except this computer's own folders (src, dest). The link keeps it after the #, which
   // browsers never send to the server.
   const CARRY_KEYS = ['config', 'printer', 'onlyFits', 'plateColors', 'byColor', 'labelsApart', 'mixSupports', 'gatherMode',
-    'printed', 'plateState', 'steps', 'lastTower', 'view', 'towers', 'seq', 'build', 'extras', 'printScope'];
+    'printed', 'plateState', 'steps', 'lastTower', 'view', 'towers', 'seq', 'build', 'extras', 'printScope', 'release'];
   const CARRY_TYPES = { towers: 'array', extras: 'array', build: 'array', printed: 'object', plateState: 'object', steps: 'object', printer: 'object', config: 'object' };
   const say = m => { if ($('carry').open) $('carryMsg').textContent = m; else toast(m); };
   function carrySnapshot() {
@@ -1349,6 +1417,10 @@ details.termfold[open] > summary { color: var(--ink); }
   }
 
   function renderPrinter() {
+    $('release').innerHTML = RELEASES.map(r => `<option value="${r.id}" ${r.id === release ? 'selected' : ''}>${r.name}</option>`).join('');
+    $('release').onchange = () => useRelease($('release').value, `Using the ${releaseOf($('release').value).short} USSA files`);
+    $('releaseHow').innerHTML = 'USSA has sent the Vault download twice, and some files changed between them. ' + RELEASES.map(r => `<b>${r.short}</b> is ${esc(r.how)}.`).join(' ') + ' Not sure? Pick your folder in step 3 and the planner switches to match it.';
+    $('releaseHelp').onclick = () => { const h = $('releaseHow'); h.hidden = !h.hidden; $('releaseHelp').setAttribute('aria-expanded', String(!h.hidden)); };
     const sel = $('printer');
     // Grouped by brand; Bambu Lab first, as before
     const opt = p => `<option value="${p.id}" ${p.id === printer.id ? 'selected' : ''}>${p.name}</option>`;
@@ -2197,7 +2269,7 @@ details.termfold[open] > summary { color: var(--ink); }
   // One filament per plate colour, in the step 3 order with TPU last: e.g. grey 1, charcoal 2, orange 3, TPU 4
   function planFor(plates) {
     const keys = COLOR_ORDER.filter(k => plates.some(pl => pl.color === k));
-    return { bed: [printer.v[0], printer.v[1]], ...(preset().plate ? { plate: preset().plate } : {}), bambu: preset().bambu || null,
+    return { release, bed: [printer.v[0], printer.v[1]], ...(preset().plate ? { plate: preset().plate } : {}), bambu: preset().bambu || null,
       filaments: keys.map(k => ({ name: COLOR_NAME[k], colour: COLOR_FILL[k].toUpperCase(), ...(k === 'tpu' ? { tpu: true } : {}) })),
       plates: plates.map(pl => ({ name: plateFolder(pl), filament: keys.indexOf(pl.color) + 1,
       pieces: pl.items.map(it => ({ path: it.p.l.file.path, name: it.p.l.label, spin: it.asis ? 0 : +(it.p.l.file.angle || 0).toFixed(2), x: +(it.x + (it.p.pad || 0)).toFixed(2), y: +(it.y + (it.p.pad || 0)).toFixed(2), w: +(it.w - 2 * (it.p.pad || 0)).toFixed(2), h: +(it.h - 2 * (it.p.pad || 0)).toFixed(2), ...(it.p.pad ? { brim: it.p.pad } : {}), ...(it.diag ? { diag: it.diag === 45 ? true : it.diag } : {}), ...(it.corner ? { corner: it.corner } : {}), ...(it.p.l.tpu || it.p.l.color === 'tpu' ? { tpu: true } : {}), ...(it.p.l.supports ? { supports: true, ...(needsBrim(it.p.l.file) ? { standing: true } : {}) } : {}), ...(it.p.l.walls ? { walls: it.p.l.walls } : {}), ...(it.p.l.infill ? { infill: it.p.l.infill } : {}) })) })) };
@@ -2305,12 +2377,20 @@ details.termfold[open] > summary { color: var(--ink); }
   // The Vault folder the user picked: relative path -> File. Matching by the end of the path also works when
   // they picked the folder above or below the download's top folder.
   let vaultFolder = null;
-  async function filesFromHandle(dir, prefix = '', out = new Map()) {
+  async function filesFromHandle(dir, prefix = '', out = new Map(), zips = []) {
     for await (const [name, h] of dir.entries()) {
-      if (h.kind === 'directory') await filesFromHandle(h, prefix + name + '/', out);
+      if (h.kind === 'directory') await filesFromHandle(h, prefix + name + '/', out, zips);
       else if (/\.stl$/i.test(name)) out.set(prefix + name, h);
+      else if (/\.zip$/i.test(name)) zips.push(name);
     }
+    out.zips = zips;
     return out;
+  }
+  // A folder with no part files: most likely the download's zip (or the zip inside it) isn't unzipped yet
+  function noParts(name, zips) {
+    const z = zips.find(n => /archive|vault|ussa/i.test(n)) || zips[0];
+    return z ? `\u201c${name}\u201d has no part files yet, only \u201c${z}\u201d. Unzip it, then choose the folder it makes.`
+      : `No part files in \u201c${name}\u201d. Choose the unzipped ${folderHint()} folder.`;
   }
   // Names compared loosely: letters and digits only, so an unzip that garbles "²", drops the space in
   // "M5 2F Module .stl" or changes case or Unicode form still matches
@@ -2351,7 +2431,9 @@ details.termfold[open] > summary { color: var(--ink); }
         h = await window.showDirectoryPicker({ id: 'vault', mode: 'read', startIn: 'downloads' });
         try { await idb('readwrite', s => s.put(h, 'folder')); } catch (e) { /* remembering it is only a convenience */ }
       }
-      return { name: h.name, files: await filesFromHandle(h), handle: true };
+      const files = await filesFromHandle(h);
+      if (!files.size) throw new Error(noParts(h.name, files.zips));
+      return { name: h.name, files, handle: true };
     }
     // Safari and Firefox: a folder upload field. Files stay on this computer; the page only reads them.
     return new Promise((res, rej) => {
@@ -2359,7 +2441,8 @@ details.termfold[open] > summary { color: var(--ink); }
       inp.onchange = () => {
         const files = new Map();
         for (const f of inp.files) if (/\.stl$/i.test(f.name)) files.set(f.webkitRelativePath.split('/').slice(1).join('/'), f);
-        files.size ? res({ name: (inp.files[0].webkitRelativePath || '').split('/')[0], files }) : rej(new Error('No STL files in that folder.'));
+        const name = ((inp.files[0] || {}).webkitRelativePath || '').split('/')[0];
+        files.size ? res({ name, files }) : rej(new Error(noParts(name || 'That folder', [...inp.files].map(f => f.name).filter(n => /\.zip$/i.test(n)))));
       };
       inp.oncancel = () => rej(new DOMException('cancelled', 'AbortError'));
       inp.click();
@@ -2395,7 +2478,7 @@ details.termfold[open] > summary { color: var(--ink); }
   }
   async function buildProject(plan, folder, progress) {
     const missing = [...new Set(plan.plates.flatMap(p => p.pieces.map(x => x.path)))].filter(p => !findFile(folder.files, p));
-    if (missing.length) throw new Error(`${plural(missing.length, 'part')} not found in \u201c${folder.name}\u201d: ${missingList(missing)}. Pick the Vault download folder (${SRC_DEFAULT.split('/').pop()}).`);
+    if (missing.length) throw new Error(`${plural(missing.length, 'part')} not found in \u201c${folder.name}\u201d: ${missingList(missing)}. Pick the Vault download folder (${folderHint()}).`);
     let ps = plan.printer && BAMBU.per[plan.printer] ? { ...BAMBU.base, ...BAMBU.per[plan.printer] } : null;
     if (ps && plan.filaments && plan.filaments.length) ps = withFilaments(ps, plan.filaments);
     const ver = (ps && ps.version) || '02.09.01.70';
@@ -2515,7 +2598,7 @@ details.termfold[open] > summary { color: var(--ink); }
   // OrcaSlicer, Cura, Creality Print and others). PrusaSlicer also reads each part's settings from it.
   async function buildPlateFiles(plan, folder, progress) {
     const missing = [...new Set(plan.plates.flatMap(p => p.pieces.map(x => x.path)))].filter(p => !findFile(folder.files, p));
-    if (missing.length) throw new Error(`${plural(missing.length, 'part')} not found in \u201c${folder.name}\u201d: ${missingList(missing)}. Pick the Vault download folder (${SRC_DEFAULT.split('/').pop()}).`);
+    if (missing.length) throw new Error(`${plural(missing.length, 'part')} not found in \u201c${folder.name}\u201d: ${missingList(missing)}. Pick the Vault download folder (${folderHint()}).`);
     const outer = zipWriter(), total = plan.plates.reduce((a, p) => a + p.pieces.length, 0);
     let done = 0;
     for (const [pi, plate] of plan.plates.entries()) {
@@ -2596,12 +2679,46 @@ details.termfold[open] > summary { color: var(--ink); }
     const which = ns.length >= plateTotal ? '' : runs.length > 3 ? ` - ${plural(ns.length, 'plate')} left` : ` - ${ns.length === 1 ? 'plate' : 'plates'} ${runs.map(([a, z]) => a === z ? a : a + '-' + z).join(', ')}`;
     return `Vault - ${what} - ${pr}${which}${ext}`.replace(/[\\/:*?"<>|]/g, '-');
   }
+  // Which USSA release a picked folder is, from files only one of them has (null when it can't tell, e.g. a subfolder)
+  function releaseInFolder(files) {
+    const keys = [...files.keys()].map(k => k.normalize('NFC').toLowerCase());
+    if (keys.some(k => k.includes('s-m-l runners/') || / upd\.stl$/.test(k))) return '2611';
+    if (keys.some(k => /(^|\/)runners\/x\d runner (guide|slide)\.stl$/.test(k))) return '2610';
+    return null;
+  }
+  // Switch to the folder's release. True when the plan changed, so plates made for the other release must be redone.
+  function matchFolderRelease(folder) {
+    const r = releaseInFolder(folder.files);
+    return !!r && useRelease(r, `Your folder is the ${releaseOf(r).short} Vault download, so the plan now uses its files.`);
+  }
+  // Every part file must be the size the planner measured, or its angle and footprint may be off: USSA has re-exported
+  // files under the same name before. Throws with the parts that differ.
+  async function checkSizes(plates, folder) {
+    const other = new Map(filesOf(RELEASES.find(r => r.id !== release).id).map(f => [f.path, f.size]));
+    const odd = [];
+    for (const path of neededPaths(plates)) {
+      const want = (FILE_BY_PATH.get(path) || {}).size, h = findFile(folder.files, path);
+      if (!want || !h) continue;
+      const got = (h.getFile ? await h.getFile() : h).size;
+      if (got !== want) odd.push({ path, other: other.get(path) === got });
+    }
+    if (!odd.length) return;
+    const names = missingList(odd.map(o => o.path));
+    throw new Error(odd.every(o => o.other)
+      ? `${names} ${odd.length > 1 ? 'are' : 'is'} from the ${RELEASES.find(r => r.id !== release).short} download, but the planner is set to ${releaseOf(release).short}. Change “USSA files” at the top to match your folder, then try again.`
+      : `${names} ${odd.length > 1 ? 'differ' : 'differs'} from the ${releaseOf(release).short} Vault download the planner knows, so ${odd.length > 1 ? 'they' : 'it'} might not be placed right. Check that you picked the USSA download, or that USSA hasn’t sent a newer one.`);
+  }
   async function makeDownload(plates, fresh) {
     const box = $('gProg'), btns = document.querySelectorAll('#gMake, #gPick');
     const progress = (f, msg) => { box.hidden = false; box.querySelector('i').style.width = Math.round(f * 100) + '%'; box.querySelector('span').textContent = msg; };
     btns.forEach(b => { b.disabled = true; });
     try {
-      if (fresh || !vaultFolder) { progress(0, 'Opening your Vault folder\u2026'); vaultFolder = await pickVaultFolder(fresh); rememberedFolder = ''; }
+      if (fresh || !vaultFolder) {
+        progress(0, 'Opening your Vault folder\u2026'); vaultFolder = await pickVaultFolder(fresh); rememberedFolder = '';
+        if (matchFolderRelease(vaultFolder)) { btns.forEach(b => { b.disabled = false; }); return; } // plates redone: check them, then make again
+      }
+      progress(0, 'Checking your part files\u2026');
+      await checkSizes(plates, vaultFolder);
       const folders = gatherMode === 'folders', plateFiles = !folders && !preset().bambu; // other printers: one 3MF per plate
       const blob = folders ? await buildFolders(plates, vaultFolder, progress)
         : plateFiles ? await buildPlateFiles(planFor(plates), vaultFolder, progress)
@@ -2625,9 +2742,12 @@ details.termfold[open] > summary { color: var(--ink); }
   const ICON_BAD = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M8 4.2v4.6M8 11.3v.2" stroke="var(--sheet)" stroke-width="1.9" stroke-linecap="round"/></svg>';
   function folderState(plates) {
     if (vaultFolder) {
+      // The folder is the other USSA release: say so, and offer to switch rather than listing "missing" files
+      const fr = releaseInFolder(vaultFolder.files);
+      if (fr && fr !== release) return { ready: false, html: `<p class="fstat bad">${ICON_BAD}<span><b>${esc(vaultFolder.name)}</b> is the ${releaseOf(fr).short} Vault download, but the planner is set to ${releaseOf(release).short}. <button type="button" class="btn" data-userel="${fr}">Use the ${releaseOf(fr).short} files</button></span></p>` };
       const need = neededPaths(plates), gone = need.filter(p => !findFile(vaultFolder.files, p)), miss = gone.length;
       // A few missing out of many: the right folder, but files named or placed differently (another release of the download?)
-      const hint = miss * 2 < need.length ? ` If that is the Vault download, your copy may name these differently from the one this planner knows (${esc(SRC_DEFAULT.split('/').pop())}).` : ` Choose the unzipped ${esc(SRC_DEFAULT.split('/').pop())} folder itself.`;
+      const hint = miss * 2 < need.length ? ` If that is the Vault download, your copy may name these differently from the one this planner knows (${esc(folderHint())}).` : ` Choose the unzipped ${esc(folderHint())} folder itself.`;
       return miss ? { ready: false, html: `<p class="fstat bad">${ICON_BAD}<span><b>${esc(vaultFolder.name)}</b> is missing ${miss} of ${need.length} parts: ${esc(missingList(gone))}.${hint}</span></p>` }
         : { ready: true, html: `<p class="fstat ok">${ICON_OK}<span><b>${esc(vaultFolder.name)}</b>: all ${need.length} parts found</span></p>` };
     }
@@ -2648,7 +2768,7 @@ details.termfold[open] > summary { color: var(--ink); }
       ${canMake ? `<ol class="gsteps">
         <li class="gstep${fs.ready ? ' done' : ''}"><span class="gnum">1</span>
           <div class="gtext"><b>Choose your unzipped Vault folder</b>
-            <small>The <code>${esc(SRC_DEFAULT.split('/').pop())}</code> folder from USSA. If your browser asks to let this site view it, click <b>Allow</b>: the page only reads the part files to build the project, and nothing is uploaded or changed.</small>
+            <small>The unzipped <code>${esc(folderHint())}</code> folder from USSA. If your browser asks to let this site view it, click <b>Allow</b>: the page only reads the part files to build the project, and nothing is uploaded or changed.</small>
             ${fs.html}</div>
           <button class="btn${fs.ready ? '' : ' primary'}" id="gPick">${picked ? 'Change folder' : 'Choose folder…'}</button></li>
         <li class="gstep"><span class="gnum">2</span>
@@ -2663,7 +2783,7 @@ details.termfold[open] > summary { color: var(--ink); }
     document.querySelectorAll('#gatherMode [data-mode]').forEach(b => b.onclick = () => { gatherMode = b.dataset.mode; store.set('gatherMode', gatherMode); renderPrint(); });
     if ($('gMake')) $('gMake').onclick = () => makeDownload(plates, false);
     if ($('gPick')) $('gPick').onclick = async () => {
-      try { vaultFolder = await pickVaultFolder(true); rememberedFolder = ''; renderPrint(); }
+      try { vaultFolder = await pickVaultFolder(true); rememberedFolder = ''; if (!matchFolderRelease(vaultFolder)) renderPrint(); }
       catch (e) { if (e.name !== 'AbortError') { const box = $('gProg'); box.hidden = false; box.querySelector('span').textContent = e.message || String(e); } }
     };
     // Chrome and Edge remember the folder; show it as already chosen (reading it again asks for permission on Make)
@@ -2797,6 +2917,7 @@ details.termfold[open] > summary { color: var(--ink); }
 
   normalize();
   renderAll();
+  if (HAS_PREVIEWS) (window.requestIdleCallback || (f => setTimeout(f, 1500)))(preloadBuildSheets);
 })();
 </script>
 </body>

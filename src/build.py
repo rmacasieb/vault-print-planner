@@ -3,7 +3,8 @@
 usage: python3 -I build.py [--public] <foot.tsv> <out.html> [previews/index.tsv]
 --public: the version for sharing. Leaves out the Mac-only VaultPrint helper and Terminal script, and this Mac's paths.
 Leave out previews/index.tsv to build without part pictures.
-foot.tsv columns: path, bbox dx, dy, dz, volume mm3, footprint a, footprint b, angle
+foot.tsv columns: path, bbox dx, dy, dz, volume mm3, footprint a, footprint b, angle (the Oct 2026 download;
+src/stl-measurements-2611.tsv has the Nov 2026 files that are new or changed shape)
 index.tsv columns: path, sprite sheet number, cell in sheet (from the thumbnail packer)
 """
 import json
@@ -16,11 +17,17 @@ public = "--public" in sys.argv
 if public:
     sys.argv.remove("--public")
 foot, out = sys.argv[1], sys.argv[2]
-thumbs = {}
+thumbs, thumbs2611 = {}, {}
 if len(sys.argv) > 3:
     for line in pathlib.Path(sys.argv[3]).read_text().strip().split("\n"):
         path, sheet, cell = line.split("\t")
         thumbs[path] = [int(sheet), int(cell)]
+    # Pictures of the Nov 2026 files that are new or changed shape (previews/index-2611.tsv, from src/render-sheet.js)
+    i2611 = pathlib.Path(sys.argv[3]).with_name("index-2611.tsv")
+    if i2611.exists():
+        for line in i2611.read_text().strip().split("\n"):
+            path, sheet, cell = line.split("\t")
+            thumbs2611[path] = [int(sheet), int(cell)]
 
 # Parts Bambu Studio warns about when sliced as exported without supports ("floating cantilever" and so on),
 # from slicing every STL on its own: path, Bambu's warning (empty when it's happy)
@@ -43,16 +50,32 @@ if rf.exists():
         if len(c) > 2 and c[2]:
             reach[c[0]] = round(float(c[2]), 1)
 
-rows = []
-for line in pathlib.Path(foot).read_text().strip().split("\n"):
+# USSA releases: every STL each download has, with its size in bytes (src/ussa-<release>-paths.tsv, from src/ussa-paths.py)
+sizes = {r: dict((l.split("\t")[0], int(l.split("\t")[1])) for l in (here / f"ussa-{r}-paths.tsv").read_text().strip().split("\n")) for r in ("2610", "2611")}
+
+def row(line, pics=True, pictures=None):
     p, bx, by, bz, vol, fa, fb, ang = line.split("\t")
     a, b = sorted((float(fa), float(fb)), reverse=True)
     # Round parts (keys, knobs, disks): turning them doesn't shrink their footprint, so keep them as exported
     if float(bx) * float(by) <= float(fa) * float(fb) * 1.03:
         a, b, ang = *sorted((float(bx), float(by)), reverse=True), "0"
-    rows.append([p, a, b, float(bz), int(float(vol)), float(ang)] + thumbs.get(p, [0, 0]) + [1 if p in needs else 0, reach.get(p, -1), float(bx), float(by)])
+    return [p, a, b, float(bz), int(float(vol)), float(ang)] + ((pictures or thumbs).get(p, [0, 0]) if pics else [0, 0]) + [1 if p in needs else 0, reach.get(p, -1), float(bx), float(by)]
 
+rows = [row(line) + [sizes["2610"][line.split("\t")[0]]] for line in pathlib.Path(foot).read_text().strip().split("\n")]
 catalog = "window.VAULT_FILES=" + json.dumps(rows, ensure_ascii=False, separators=(",", ":")) + ";"
+# The Nov 2026 download (Vault Archive_18.11.2026): files measured again where they are new or changed shape
+# (src/stl-measurements-2611.tsv), every file's size, and the Oct 2026 files it no longer has. A changed part keeps its old
+# picture only if it's still exported at the same angle (pictures show the part as exported); its support reach is reused,
+# since the support rules didn't change.
+old = {r[0]: r for r in rows}
+r2611 = []
+for line in (here / "stl-measurements-2611.tsv").read_text().strip().split("\n"):
+    p = line.split("\t")[0]
+    r = row(line, pictures=thumbs2611) if p in thumbs2611 else row(line, pics=p in old and abs(old[p][5] - float(line.split("\t")[7])) < 1)
+    r2611.append(r + [sizes["2611"][p]])
+rel = {"rows": r2611, "size": {p: s for p, s in sizes["2611"].items() if sizes["2610"].get(p) != s},
+       "drop": sorted(p for p in sizes["2610"] if p not in sizes["2611"])}
+catalog += "window.VAULT_2611=" + json.dumps(rel, ensure_ascii=False, separators=(",", ":")) + ";"
 # Bambu Studio's own project settings per printer (src/bambu-settings/<printer id>.json, each saved by Bambu Studio itself).
 # Keys every printer shares are stored once.
 sets = {f.stem: json.loads(f.read_text()) for f in sorted((here / "bambu-settings").glob("*.json"))}

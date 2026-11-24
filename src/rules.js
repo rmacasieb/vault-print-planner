@@ -70,10 +70,10 @@
       add('Runners', 'Runner guide' + t, U + `Runners/XL Runners/x${d} Runner Guide XL.stl`, 2, x);
       add('Runners', 'Runner slide' + t, U + `Runners/XL Runners/x${d} Runner Slide XL.stl`, 2, x);
     } else {
-      add('Drawer', 'Drawer box' + t, fam + `${w}${d}/Boxes/${w}${d} Box ${h}F.stl`, 1, x);
+      add('Drawer', 'Drawer box' + t, [fam + `${w}${d}/Boxes/${w}${d} Box ${h}F Upd.stl`, fam + `${w}${d}/Boxes/${w}${d} Box ${h}F.stl`], 1, x);
       add('Drawer', 'Drawer front (facade)' + t, fam + `Facades/${w}${h}F (Turn On Supports).stl`, 1, { supports: true, ...x });
-      add('Runners', 'Runner guide' + t, U + `Runners/x${d} Runner Guide.stl`, 2, x);
-      add('Runners', 'Runner slide' + t, U + `Runners/x${d} Runner Slide.stl`, 2, x);
+      add('Runners', 'Runner guide' + t, [U + `Runners/S-M-L Runners/x${d} Runner Guide.stl`, U + `Runners/x${d} Runner Guide.stl`], 2, x);
+      add('Runners', 'Runner slide' + t, [U + `Runners/S-M-L Runners/x${d} Runner Slide.stl`, U + `Runners/x${d} Runner Slide.stl`], 2, x);
     }
     add('Runners', 'Runner stopper' + t, U + 'Runners/Runner Stopper.stl', 2, { spare: true, ...x });
     if (o.gearedRails) add('Runners', 'Geared rail' + t, U + `Geared Rails/${w} Rails.stl`, 2,
@@ -136,12 +136,13 @@
     { id: 'heavy', label: 'Heavyweight roof (carry handle)', widths: ['L', 'L2', 'XL', 'XL2'] },
     { id: 'heavycut', label: 'Heavyweight roof, cut version', widths: ['XL', 'XL2'] },
   ];
-  const ROOF_FILE = { grid: 'Grid Roof', table: 'Table Roof', bowl: 'Bowl Roof', undertable: 'Under Table Mount Roof', heavy: 'Heawyweight Roof', heavycut: 'Heavyweight Roof Cut' };
+  // heavycut: renamed in the Nov 2026 download, where it's cut to fit a plate
+  const ROOF_FILE = { grid: 'Grid Roof', table: 'Table Roof', bowl: 'Bowl Roof', undertable: 'Under Table Mount Roof', heavy: 'Heawyweight Roof', heavycut: ['Heawyweight Roof (Cut to fit on a plate)', 'Heavyweight Roof Cut'] };
 
   // Roof for the top of a drawer stack, sized to a width family (S/M/L/XL) and depth
   function roof(add, rw, d, kind, topHandle) {
     if (!kind || kind === 'none') return;
-    add('Roof', ROOFS.find(r => r.id === kind).label, D + DRAWER_FAM_DIR[rw] + '/' + `${rw}${d}/Roofs/${rw}${d} ${ROOF_FILE[kind]}.stl`, 1);
+    add('Roof', ROOFS.find(r => r.id === kind).label, [].concat(ROOF_FILE[kind]).map(n => D + DRAWER_FAM_DIR[rw] + '/' + `${rw}${d}/Roofs/${rw}${d} ${n}.stl`), 1);
     if (kind === 'grid' && topHandle) add('Roof', 'Top handle', U + 'Top Handle (Turn On Supports).stl', 1, { supports: true });
     if (kind === 'heavy' || kind === 'heavycut') {
       add('Roof', 'Heavyweight roof handle', U + 'Heawyweight Roof Handle.stl', 1);
@@ -190,8 +191,8 @@
     const fam = SU + FAM_DIR[w] + '/';
     const big = w === 'L' || w === 'XL';
     const inner = big ? ' ' + { flat: 'Flat', dividers: 'Dividers', sealed: 'Sealed' }[c.caseInterior || 'flat'] : '';
-    add('Module', 'Case body' + (big ? ` (${(c.caseInterior || 'flat')})` : ''), fam + `${w}${d}/Modules/${w}${d} ${h}F${inner} Module.stl`, 1);
-    add('Module', 'Case front (facade)', w === 'XL' ? fam + 'XL1F Facade.stl' : fam + `Facades/${w}${h}F Facade.stl`, 1);
+    add('Module', 'Case body' + (big ? ` (${(c.caseInterior || 'flat')})` : ''), [fam + `${w}${d}/Modules/${w}${d} ${h}F${inner} Module_Sustainer.stl`, fam + `${w}${d}/Modules/${w}${d} ${h}F${inner} Module.stl`], 1);
+    add('Module', 'Case front (facade)', w === 'XL' ? fam + 'XL1F Facade.stl' : [fam + `Facades/${w}${h}F Facade_Sustainer.stl`, fam + `Facades/${w}${h}F Facade.stl`], 1);
     // Lid: 6 and 7 deep come whole or split in two with a connector. The page picks whole if it fits the printer.
     const roofDir = fam + `${w}${d}/` + (resolve(fam + `${w}${d}/Roofs/${w}${d} Roof.stl`) || resolve(fam + `${w}${d}/Roofs/${w}${d} Roof Whole.stl`) ? 'Roofs/' : 'Roof/');
     if (d >= 6) {
@@ -282,7 +283,19 @@
     }
     if (s.stationaryHandle) add('Handles', 'Stationary handle', MO + `Stationary Handle/${w} Stationary Handle.stl`, 1);
     if (s.pullHandle) {
-      add('Handles', 'Pull-out handle', MO + `Pull-out Handle/${w} Pull-out Handle.stl`, 1);
+      const PH = MO + 'Pull-out Handle/';
+      if (s.handleDesign === 2) {
+        // The Nov 2026 design (manual, Modifications Assembly 14/15): S and M handles come in two parts; L and XL are one
+        // bar with a top cover and a front cover at each end. USSA: "use m6-8mm-8mm heat inserts for all sized handles".
+        if (w === 'S' || w === 'M') {
+          add('Handles', 'Pull-out handle, part 1', PH + `${w} Pull-out Handle Part 1.stl`, 1);
+          add('Handles', 'Pull-out handle, part 2', PH + `${w} Pull-out Handle Part 2.stl`, 1);
+        } else {
+          add('Handles', 'Pull-out handle', PH + `${w} Pull-out Handle (With Heat Inserts).stl`, 1, { fallback: PH + `${w} Pull-out Handle (No Heat Inserts).stl` });
+          add('Handles', 'Pull-out handle top covers', PH + 'Pull-Out Handle Top Covers.stl', 1, { inferred: 'The drawing shows a cover on each end of the bar; this assumes the file holds both.' });
+          add('Handles', 'Pull-out handle front cover', PH + 'Pull-Out Handle Front Cover.stl', 2, { inferred: 'Two, one at each end, read from the drawing.' });
+        }
+      } else add('Handles', 'Pull-out handle', PH + `${w} Pull-out Handle.stl`, 1);
       add('Handles', 'Pull-out handle lock', MO + `Backbone/${w} Pull-out Handle Lock.stl`, 1);
       if (w === 'S') add('Handles', 'Pull-out handle lock, part 2', MO + 'Backbone/S Pull-out Handle Lock Part 2.stl', 1);
       add('Handles', 'Handle lock knob, part 1', MO + 'Backbone/Handle Lock Knob Part 1.stl', 2, { inferred: 'Two knobs, read from the trolley drawings.' });
@@ -325,6 +338,7 @@
     if (s.stationaryHandle) push('M4 × 60 mm button-head bolt', 8, 'Stationary handle');
     if (s.pullHandle) {
       push('M6 × 30 mm countersunk bolt', 4, 'Pull-out handle');
+      if (s.handleDesign === 2) push('M6 × 8 × 8 heat insert', 4, 'Pull-out handle (4 in the drawing)');
       push('M6 × 35 mm hex bolt', 2, 'Handle lock');
       push('M6 × 8 × 8 heat insert', 2, 'Handle lock knobs');
       push('M16 rod, cut to stack height', 2, 'Pull-out handle');
@@ -334,9 +348,11 @@
 
   function collector(resolve) {
     const lines = [], missing = [];
+    // path can be a list of names, newest USSA release first: the first file the download has is used
     const add = (group, label, path, qty, extra = {}) => {
-      const f = resolve(path) || (extra.fallback && resolve(extra.fallback));
-      if (!f) { missing.push(path); return; }
+      const paths = [].concat(path);
+      const f = paths.map(resolve).find(Boolean) || (extra.fallback && resolve(extra.fallback));
+      if (!f) { missing.push(paths[paths.length - 1]); return; }
       const l = { group, label, file: f, qty, color: colorOf(label, group), ...strengthOf(label), ...extra };
       // Supports follow USSA only: the files they name "(Turn On Supports)" plus the XL drawer front (see drawerInsert).
       // Bambu Studio's overhang warnings (src/bambu-support-audit.tsv) no longer turn supports on: USSA builds break-away
@@ -357,6 +373,7 @@
   // A tower's base, wheels, feet and handles. s = { w: 'S'|'M'|'L'|'XL', d, base, wheels, feet, casters, stationaryHandle, pullHandle }
   function buildStack(s, resolve) {
     const k = collector(resolve);
+    s = { ...s, handleDesign: resolve(MO + 'Pull-out Handle/S Pull-out Handle Part 1.stl') ? 2 : 1 };
     stackParts(k.add, s);
     return { lines: k.lines, missing: k.missing, hardware: stackHardware(s) };
   }

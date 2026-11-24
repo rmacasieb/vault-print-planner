@@ -2,6 +2,12 @@
 
 Changes to the Vault Print Planner at [vault.romy.io](https://vault.romy.io), newest first.
 
+## 2026-11-23
+
+- **Works with USSA's new Nov 2026 download:** USSA sent an updated Vault download ("Vault Archive_18.11.2026") with fixed roofs and modules, updated drawer boxes, re-cut XL heavyweight roofs and a new pull-out handle. Pick which download you have next to your printer ("USSA files"). If you're not sure, choose your folder in step 3 and the planner switches to match it. Your old download still works.
+- **Part pictures load about four times faster:** they're now a quarter of the size with no change in quality, the pictures your build uses load in the background, and each picture fades in instead of popping in.
+- **The new M pull-out handle is 289 mm long,** so it won't lie flat on a 256 mm bed (P1S, X1, A1). The planner lists it as too big for those printers.
+
 ## 2026-11-17
 
 - **Take your build to another computer:** "Use on another computer" at the top gives you a link holding your towers, settings and printed plates. Open it on another computer to pick up where you left off. There's still no account, and nothing is stored online.
