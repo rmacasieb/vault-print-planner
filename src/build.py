@@ -53,15 +53,28 @@ if rf.exists():
 # USSA releases: every STL each download has, with its size in bytes (src/ussa-<release>-paths.tsv, from src/ussa-paths.py)
 sizes = {r: dict((l.split("\t")[0], int(l.split("\t")[1])) for l in (here / f"ussa-{r}-paths.tsv").read_text().strip().split("\n")) for r in ("2610", "2611")}
 
-def row(line, pics=True, pictures=None):
+# Parts laid on another face than exported, because they hang out over air as exported (src/lay-flat.tsv): path ->
+# (turn, the part measured that way, the file size it was measured on). The picture still shows the file as exported.
+lay = {}
+for line in (here / "lay-flat.tsv").read_text().splitlines():
+    if line and not line.startswith("#"):
+        c = line.split("\t")
+        lay[c[0]] = (c[1], "\t".join([c[0]] + c[2:9]), int(c[9]))
+
+def row(line, pics=True, pictures=None, size=None):
+    turn = None
+    if line.split("\t")[0] in lay and lay[line.split("\t")[0]][2] == size:
+        turn, line = lay[line.split("\t")[0]][0], lay[line.split("\t")[0]][1]
     p, bx, by, bz, vol, fa, fb, ang = line.split("\t")
     a, b = sorted((float(fa), float(fb)), reverse=True)
     # Round parts (keys, knobs, disks): turning them doesn't shrink their footprint, so keep them as exported
     if float(bx) * float(by) <= float(fa) * float(fb) * 1.03:
         a, b, ang = *sorted((float(bx), float(by)), reverse=True), "0"
-    return [p, a, b, float(bz), int(float(vol)), float(ang)] + ((pictures or thumbs).get(p, [0, 0]) if pics else [0, 0]) + [1 if p in needs else 0, reach.get(p, -1), float(bx), float(by)]
+    r = [p, a, b, float(bz), int(float(vol)), float(ang)] + ((pictures or thumbs).get(p, [0, 0]) if pics else [0, 0]) + [1 if p in needs else 0, reach.get(p, -1), float(bx), float(by)]
+    # laid flat: Bambu's warning and support reach were measured as exported, so they don't apply
+    return r if not turn else r[:8] + [0, -1] + r[10:] + [size, turn]
 
-rows = [row(line) + [sizes["2610"][line.split("\t")[0]]] for line in pathlib.Path(foot).read_text().strip().split("\n")]
+rows = [(lambda r, z: r if len(r) > 12 else r + [z])(row(line, size=sizes["2610"][line.split("\t")[0]]), sizes["2610"][line.split("\t")[0]]) for line in pathlib.Path(foot).read_text().strip().split("\n")]
 catalog = "window.VAULT_FILES=" + json.dumps(rows, ensure_ascii=False, separators=(",", ":")) + ";"
 # The Nov 2026 download (Vault Archive_18.11.2026): files measured again where they are new or changed shape
 # (src/stl-measurements-2611.tsv), every file's size, and the Oct 2026 files it no longer has. A changed part keeps its old
@@ -71,8 +84,9 @@ old = {r[0]: r for r in rows}
 r2611 = []
 for line in (here / "stl-measurements-2611.tsv").read_text().strip().split("\n"):
     p = line.split("\t")[0]
-    r = row(line, pictures=thumbs2611) if p in thumbs2611 else row(line, pics=p in old and abs(old[p][5] - float(line.split("\t")[7])) < 1)
-    r2611.append(r + [sizes["2611"][p]])
+    z = sizes["2611"][p]
+    r = row(line, pictures=thumbs2611, size=z) if p in thumbs2611 else row(line, pics=p in old and abs(old[p][5] - float(line.split("\t")[7])) < 1, size=z)
+    r2611.append(r if len(r) > 12 else r + [z])
 rel = {"rows": r2611, "size": {p: s for p, s in sizes["2611"].items() if sizes["2610"].get(p) != s},
        "drop": sorted(p for p in sizes["2610"] if p not in sizes["2611"])}
 catalog += "window.VAULT_2611=" + json.dumps(rel, ensure_ascii=False, separators=(",", ":")) + ";"

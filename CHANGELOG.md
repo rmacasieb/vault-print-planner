@@ -2,6 +2,10 @@
 
 Changes to the Vault Print Planner at [vault.romy.io](https://vault.romy.io), newest first.
 
+## 2026-11-27
+
+- **The case lock's inner part now prints lying flat.** As USSA exported it, it stands up with its top arm hanging out over air, which can fail and turn the plate to spaghetti. On its side it has nothing overhanging. The Bambu Studio project, plate files and STL folders all place it that way.
+
 ## 2026-11-23
 
 - **Works with USSA's new Nov 2026 download:** USSA sent an updated Vault download ("Vault Archive_18.11.2026") with fixed roofs and modules, updated drawer boxes, re-cut XL heavyweight roofs and a new pull-out handle. Pick which download you have next to your printer ("USSA files"). If you're not sure, choose your folder in step 3 and the planner switches to match it. Your old download still works.

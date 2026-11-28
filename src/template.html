@@ -613,7 +613,7 @@ details.termfold[open] > summary { color: var(--ink); }
 (function () {
   const R = window.VaultRules;
   // Row: path, true footprint a, b (smallest rectangle around the part seen from above), height z, volume mm³, export angle, sprite sheet, cell, Bambu says it needs supports
-  const fileOf = r => ({ path: r[0], dims: [r[1], r[2], r[3]], vol: r[4], angle: r[5], sheet: r[6], cell: r[7], needsSupport: !!r[8], supReach: r[9] == null || r[9] < 0 ? null : r[9], ex: r[10] ? [r[10], r[11]] : null, size: r[12] });
+  const fileOf = r => ({ path: r[0], dims: [r[1], r[2], r[3]], vol: r[4], angle: r[5], sheet: r[6], cell: r[7], needsSupport: !!r[8], supReach: r[9] == null || r[9] < 0 ? null : r[9], ex: r[10] ? [r[10], r[11]] : null, size: r[12], turn: r[13] || null });
   // USSA has shipped the download twice. The Nov 2026 one renamed, moved and re-exported some files (several at a new
   // angle), so sizes, angles and names come from the release the user has. Newest first.
   const RELEASES = [
@@ -1082,7 +1082,7 @@ details.termfold[open] > summary { color: var(--ink); }
         ${l.note ? `<div class="pnote">${esc(l.note)}</div>` : ''}
         ${l.inferred ? `<div class="pnote"><span class="badge inf">Inferred</span> ${esc(l.inferred)}</div>` : ''}
         <div class="vbed">${bedSvg(l.file.dims, printer.v, (l.fit || fitOf(l.file.dims, printer.v, l.file.ex)).s, true)}<span>Footprint on your ${printer.v[0]} \u00d7 ${printer.v[1]} mm plate. The thick edge is the front.</span></div>
-        <p class="pnote">Shown standing the way the file is exported, which is how it goes on the plate.</p>
+        <p class="pnote">${l.file.turn ? 'Shown the way the file is exported. It goes on the plate laid flat on its side (see Laid flat), so the sizes above are as it prints.' : 'Shown standing the way the file is exported, which is how it goes on the plate.'}</p>
         <div class="actions"><button class="btn primary" data-addextra="${esc(l.file.path)}">Print this part on its own</button></div>
       </div>`;
     const d = $('viewer'); if (d.showModal) d.showModal(); else d.setAttribute('open', '');
@@ -1179,6 +1179,7 @@ details.termfold[open] > summary { color: var(--ink); }
     if (brimOf(l.file)) tags.push('<span class="tag wall" title="Tall and thin: a 5 mm brim keeps it from wobbling loose late in the print">Brim</span>');
     if (l.flex) tags.push('<span class="tag wall" title="This part has to bend. More walls make it stiff and it can crack.">Keep 2 walls</span>');
     if (l.tpu) tags.push('<span class="tag sup">TPU</span>');
+    if (l.file.turn) tags.push('<span class="tag wall" title="As exported, part of it hangs out over air with nothing under it, and it fails without supports. Laid on its side it has no overhang, so it goes on the plate that way.">Laid flat</span>');
     if (l.aid) tags.push('<span class="tag">Print aid</span>');
     if (l.inferred) tags.push(`<span class="badge inf" title="${esc(l.inferred)}">Inferred</span>`);
     if (l.file.angle > 2 && l.file.angle < 88) tags.push(`<span class="tag" title="The file is exported turned ${Math.round(l.file.angle)}\u00b0 on the plate. Sizes here are the part itself.">Exported at ${Math.round(l.file.angle)}\u00b0</span>`);
@@ -2272,7 +2273,7 @@ details.termfold[open] > summary { color: var(--ink); }
     return { release, bed: [printer.v[0], printer.v[1]], ...(preset().plate ? { plate: preset().plate } : {}), bambu: preset().bambu || null,
       filaments: keys.map(k => ({ name: COLOR_NAME[k], colour: COLOR_FILL[k].toUpperCase(), ...(k === 'tpu' ? { tpu: true } : {}) })),
       plates: plates.map(pl => ({ name: plateFolder(pl), filament: keys.indexOf(pl.color) + 1,
-      pieces: pl.items.map(it => ({ path: it.p.l.file.path, name: it.p.l.label, spin: it.asis ? 0 : +(it.p.l.file.angle || 0).toFixed(2), x: +(it.x + (it.p.pad || 0)).toFixed(2), y: +(it.y + (it.p.pad || 0)).toFixed(2), w: +(it.w - 2 * (it.p.pad || 0)).toFixed(2), h: +(it.h - 2 * (it.p.pad || 0)).toFixed(2), ...(it.p.pad ? { brim: it.p.pad } : {}), ...(it.diag ? { diag: it.diag === 45 ? true : it.diag } : {}), ...(it.corner ? { corner: it.corner } : {}), ...(it.p.l.tpu || it.p.l.color === 'tpu' ? { tpu: true } : {}), ...(it.p.l.supports ? { supports: true, ...(needsBrim(it.p.l.file) ? { standing: true } : {}) } : {}), ...(it.p.l.walls ? { walls: it.p.l.walls } : {}), ...(it.p.l.infill ? { infill: it.p.l.infill } : {}) })) })) };
+      pieces: pl.items.map(it => ({ path: it.p.l.file.path, name: it.p.l.label, ...(it.p.l.file.turn ? { turn: it.p.l.file.turn } : {}), spin: it.asis ? 0 : +(it.p.l.file.angle || 0).toFixed(2), x: +(it.x + (it.p.pad || 0)).toFixed(2), y: +(it.y + (it.p.pad || 0)).toFixed(2), w: +(it.w - 2 * (it.p.pad || 0)).toFixed(2), h: +(it.h - 2 * (it.p.pad || 0)).toFixed(2), ...(it.p.pad ? { brim: it.p.pad } : {}), ...(it.diag ? { diag: it.diag === 45 ? true : it.diag } : {}), ...(it.corner ? { corner: it.corner } : {}), ...(it.p.l.tpu || it.p.l.color === 'tpu' ? { tpu: true } : {}), ...(it.p.l.supports ? { supports: true, ...(needsBrim(it.p.l.file) ? { standing: true } : {}) } : {}), ...(it.p.l.walls ? { walls: it.p.l.walls } : {}), ...(it.p.l.infill ? { infill: it.p.l.infill } : {}) })) })) };
   }
   // ---------- Bambu Studio project, built right here in the browser ----------
   // Reads the STLs from the Vault folder the user picks (nothing is uploaded) and writes the same .3mf layout
@@ -2313,8 +2314,11 @@ details.termfold[open] > summary { color: var(--ink); }
       },
     };
   }
-  // Read an STL (binary, or ASCII just in case), weld shared corners, undo the export spin and move it to start at 0,0,0
-  function readStl(buf, spin, name) {
+  // Lay a part on another face (src/lay-flat.tsv names the turn): a quarter or half turn about the x or y axis
+  const TURNS = { rx90: (x, y, z) => [x, -z, y], 'rx-90': (x, y, z) => [x, z, -y], ry90: (x, y, z) => [z, y, -x], 'ry-90': (x, y, z) => [-z, y, x], rx180: (x, y, z) => [x, -y, -z] };
+  // Read an STL (binary, or ASCII just in case), weld shared corners, lay it on the face its turn names, undo the export
+  // spin and move it to start at 0,0,0
+  function readStl(buf, spin, name, turn) {
     const dv = new DataView(buf), n = buf.byteLength >= 84 ? dv.getUint32(80, true) : 0;
     let raw; // 9 floats per triangle
     if (84 + n * 50 === buf.byteLength) {
@@ -2342,6 +2346,7 @@ details.termfold[open] > summary { color: var(--ink); }
     const tris = [];
     if (!count) throw new Error(`Couldn\u2019t read ${name || 'a part file'}: it has no shape in it. Try downloading the Vault files again.`);
     for (let t = 0; t < nv; t += 3) { const p = idx[t], q = idx[t + 1], r = idx[t + 2]; if (p !== q && q !== r && p !== r) tris.push(p, q, r); }
+    if (turn) { const f = TURNS[turn]; for (let i = 0; i < count * 3; i += 3) pts.set(f(pts[i], pts[i + 1], pts[i + 2]), i); }
     const co = Math.cos(-spin * Math.PI / 180), si = Math.sin(-spin * Math.PI / 180), out = new Float64Array(count * 3);
     const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < count; i++) {
@@ -2368,9 +2373,9 @@ details.termfold[open] > summary { color: var(--ink); }
   // How a piece goes on the plate: undo the export spin; turn diagonal parts onto the back-left to front-right
   // diagonal; turn manual supports so their full-height edge touches the part beside them
   async function placedMesh(p, buf) {
-    let m = readStl(buf, p.spin, fileName(p.path));
+    let m = readStl(buf, p.spin, fileName(p.path), p.turn);
     const d = p.diag === true ? 45 : p.diag; // degrees for the long side; true is 45
-    if (p.diag) m = readStl(buf, p.spin + (m.w >= m.h ? d : d - 90), fileName(p.path));
+    if (p.diag) m = readStl(buf, p.spin + (m.w >= m.h ? d : d - 90), fileName(p.path), p.turn);
     if (p.corner) for (let k = 0; k < 4; k++) { const c = topCorner(m); if (c[0] === p.corner[0] && c[1] === p.corner[1]) break; m = quarterTurn(m); }
     return m;
   }
@@ -2495,7 +2500,7 @@ details.termfold[open] > summary { color: var(--ink); }
       for (const p of plate.pieces) {
         progress(done / total, `Plate ${pi + 1} of ${count}: ${p.name}`);
         await new Promise(r => setTimeout(r));
-        const key = [p.path, p.spin, p.diag, p.corner].join('|');
+        const key = [p.path, p.turn, p.spin, p.diag, p.corner].join('|');
         if (!cache.has(key)) cache.set(key, await placedMesh(p, await fileBytes(findFile(folder.files, p.path))));
         const m = cache.get(key), meshId = id++, objId = id++, file = `3D/Objects/object_${meshId}.model`;
         await z.add(file, async put => {
@@ -2579,6 +2584,16 @@ details.termfold[open] > summary { color: var(--ink); }
     });
     return out.join('\r\n');
   }
+  // A binary STL laid on another face (normals turned too), for the STL folders
+  function turnedStl(b, turn) {
+    const out = b.slice(), dv = new DataView(out.buffer), n = dv.getUint32(80, true), f = TURNS[turn];
+    if (84 + 50 * n !== out.length) return b; // not binary: leave it, the slicer can lay it flat
+    for (let t = 0; t < n; t++) for (let k = 0; k < 4; k++) {
+      const o = 84 + t * 50 + k * 12, r = f(dv.getFloat32(o, true), dv.getFloat32(o + 4, true), dv.getFloat32(o + 8, true));
+      r.forEach((v, j) => dv.setFloat32(o + j * 4, v, true));
+    }
+    return out;
+  }
   async function buildFolders(plates, folder, progress) {
     const z = zipWriter(), all = plates.flatMap(pl => pl.lines.map(x => [pl, x]));
     const plan = planFor(plates), notes = new Map(); // plate number and file -> settings in words
@@ -2587,7 +2602,8 @@ details.termfold[open] > summary { color: var(--ink); }
     if (missing.length) throw new Error(`${plural(missing.length, 'part')} not found in \u201c${folder.name}\u201d: ${missingList(missing.map(([, x]) => x.l.file.path))}. Pick the Vault download folder.`);
     for (const [i, [pl, x]] of all.entries()) {
       progress(i / all.length, `${plateFolder(pl)}: ${x.l.label}`);
-      const b = new Uint8Array(await fileBytes(findFile(folder.files, x.l.file.path)));
+      let b = new Uint8Array(await fileBytes(findFile(folder.files, x.l.file.path)));
+      if (x.l.file.turn) b = turnedStl(b, x.l.file.turn); // laid flat, so any slicer gets it the right way up
       const t = notes.get(pl.n + '|' + x.l.file.path) || [], base = fileName(x.l.file.path).replace(/\.stl$/i, '');
       await z.add(`Vault prints/${plateFolder(pl)}/${x.count}x ${x.l.label.replace(/[\/:"\\]/g, '-')} - ${base}${t.length ? ` [${t.join(', ')}]` : ''}.stl`, put => put(b));
     }
@@ -2609,7 +2625,7 @@ details.termfold[open] > summary { color: var(--ink); }
         for (const [k, p] of plate.pieces.entries()) {
           progress(done / total, `Plate ${pi + 1} of ${plan.plates.length}: ${p.name}`);
           await new Promise(r => setTimeout(r));
-          const key = [p.path, p.spin, p.diag, p.corner].join('|');
+          const key = [p.path, p.turn, p.spin, p.diag, p.corner].join('|');
           if (!cache.has(key)) cache.set(key, await placedMesh(p, await fileBytes(findFile(folder.files, p.path))));
           const m = cache.get(key), id = k + 1;
           await put(`  <object id="${id}" type="model">\n   <mesh>\n    <vertices>\n`);

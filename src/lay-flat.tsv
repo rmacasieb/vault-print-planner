@@ -1,0 +1,4 @@
+# Parts that go on the plate laid on another face than USSA exported them (src/overhang-audit.js found an overhang out
+# over air as exported, and none this way). Columns: path, turn (as overhang-audit.js names it), then the part measured
+# that way (bbox dx, dy, dz, volume, footprint a, b, angle; src/measure-stl.js --turn=...), and the file size it was measured on.
+02. SUSTAINERS/05. Universal/Locks/LOCK INNER PART.stl	rx90	23.6	39.6	8.6	3545	23.6	39.7	0.0	796084
